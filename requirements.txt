@@ -1,0 +1,8 @@
+Django>=5.2.1
+django-debug-toolbar~=4.4.6
+django-bootstrap5~=24.3
+django-bootstrap-icons~=0.8.6
+google-auth>=2.23.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.95.0

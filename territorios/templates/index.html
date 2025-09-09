@@ -1,0 +1,11 @@
+{% extends "principal.html" %}
+{% block content %}
+<h1>Archivos de Google Drive</h1>
+<ul>
+  {% for file in files %}
+    <li>{{ file.name }} (ID: {{ file.id }})</li>
+  {% empty %}
+    <li>No se encontraron archivos.</li>
+  {% endfor %}
+</ul>
+{% endblock %}
