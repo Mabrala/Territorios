@@ -1,0 +1,14 @@
+{% if f.type == "folder" %}
+    📁 <a href="{% url 'list_content' f.id %}">{{ f.name }}</a>
+{% elif f.type == "docx" %}
+    📝 {{ f.name }}
+{% elif f.type == "pdf" %}
+    📄 {{ f.name }}
+{% elif f.type == "excel" %}
+    📊 {{ f.name }}
+{% elif f.type == "image" %}
+    🖼️ {{ f.name }}
+{% else %}
+    ❓ {{ f.name }}
+{% endif %}
+

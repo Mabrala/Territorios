@@ -1,28 +1,176 @@
+from django.contrib import messages
 from django.shortcuts import render, redirect
 import os
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-
-def index(request):
-    return render(request, 'index.html')
-
+from .models import *
+                
+#Revisa las credenciales, si no las tiene devuelve None, si las tine devuelve lista
 def check_creds(request):
     return request.session.get('credentials')
     
+def clasify_items(items):
+    for item in items:
+        if item["mimeType"] == "application/vnd.google-apps.folder":
+            item["type"] = "folder"
+        else:
+            # Clasificar archivos por tipo
+            if item["mimeType"] in [
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/msword"
+            ]:
+                item["type"] = "docx"
+            elif item["mimeType"] == "application/pdf":
+                item["type"] = "pdf"
+            elif item["mimeType"] in [
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-excel"
+            ]:
+                item["type"] = "excel"
+            elif item["mimeType"].startswith("image/"):
+                item["type"] = "image"
+            else:
+                item["type"] = "other"
+    return items
 
+def index(request):
+    creds_info = check_creds(request)
+    if creds_info:
+        drive_folder = Folder.objects.first()
+        if drive_folder != None:
+            creds = Credentials(**creds_info)
+            service = build('drive', 'v3', credentials=creds)
+
+            results = service.files().list(
+                q=f"'{drive_folder.id_folder}' in parents",
+                pageSize=20,
+                fields="files(id, name, mimeType)",
+                orderBy="folder,name",  # primero carpetas, luego archivos
+             ).execute()
+            
+            items = results.get("files", [])
+            
+            items = clasify_items(items)
+                    
+            return render(request, 'index.html', {"files":items})
+    else:
+        return redirect("drive_auth_init")
+
+#Lista el contenido de cualquier carpeta
+def list_folder_content(request,folder_id):
+    creds_info = check_creds(request)
+    if creds_info:
+        creds = Credentials(**creds_info)
+        service = build('drive', 'v3', credentials=creds)
+        folder = service.files().get(
+            fileId=folder_id,
+            fields="name"
+        ).execute()
+        results = service.files().list(
+                q=f"'{folder_id}' in parents",
+                pageSize=20,
+                fields="files(id, name, mimeType)",
+                orderBy="folder,name",  # primero carpetas, luego archivos
+             ).execute()
+        
+        items = results.get("files", [])
+        
+        items = clasify_items(items)
+
+        return render(request, 'folder/list.html', {"files":items,"folder_name":folder})   
+    
+    else:
+        return redirect("drive_auth_init")
+
+def search_in_folder(request, query):
+    creds_info = check_creds(request)
+    
+    if not creds_info:
+        return redirect("drive_auth_init")
+
+    drive_folder = Folder.objects.first()
+    folder_id = drive_folder.id_folder
+    creds = Credentials(**creds_info)
+    service = build('drive', 'v3', credentials=creds)
+
+    # Obtener el nombre de la carpeta principal
+    folder = service.files().get(fileId=folder_id, fields="name").execute()
+
+    # Función recursiva para buscar en carpeta y subcarpetas
+    def recursive_search(folder_id, query):
+        results = []
+        # Buscar archivos y carpetas en la carpeta actual
+        response = service.files().list(
+            q=f"'{folder_id}' in parents and name contains '{query}'",
+            pageSize=100,
+            fields="files(id, name, mimeType)"
+        ).execute()
+        results.extend(response.get("files", []))
+
+        # Buscar subcarpetas para recursión
+        subfolders = service.files().list(
+            q=f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder'",
+            fields="files(id, name)"
+        ).execute().get("files", [])
+
+        for subfolder in subfolders:
+            results.extend(recursive_search(subfolder["id"], query))
+
+        return results
+
+    items = recursive_search(folder_id, query)
+    items = clasify_items(items)  # Clasifica por tipo: carpeta, docx, pdf, imagen, excel
+
+    return render(request, 'folder/list.html', {"files": items, "folder_name": folder})
+                
+#Esta vista solo se utiliza para listar las carpetas de Drive cuando 
+# se va a seleccionar la carpeta de trabajo
 def list_drive_files(request):
     creds_info = check_creds(request)
     if creds_info:
         creds = Credentials(**creds_info)
         service = build('drive', 'v3', credentials=creds)
 
-        results = service.files().list(pageSize=10).execute()
-        items = results.get('files', [])
+        # Pedimos nombre, id y mimeType para saber si es archivo o carpeta
+        results = service.files().list(
+            q = "mimeType='application/vnd.google-apps.folder'",
+            pageSize=20,
+            fields="files(id, name, mimeType)"
+        ).execute()
 
-        return render(request, 'index.html', {'files': items})
+        items = results.get('files', [])
+        
+        return render(request, "choose_drive_file/choose_drive_file.html", {"files": items})
     else:
-        return redirect('drive_auth_init')
+        return redirect("drive_auth_init")
+
+#Selecciona la carpeta sobre la que se trabajara
+def select_drive_folder(request, id_folder):
+    creds_info = check_creds(request)
+    if creds_info:
+        creds = Credentials(**creds_info)
+        service = build('drive', 'v3', credentials=creds)
+        folder = service.files().get(
+            fileId=id_folder,
+            fields="id,name,mimeType"
+        ).execute()
+        if folder["mimeType"] != "application/vnd.google-apps.folder":
+            messages.error(request, "El ID no corresponde a una carpeta.")
+            return redirect("list_drive_files")
+                
+        drive_folder = Folder.objects.update_or_create(
+            id=1,
+            defaults={
+                "id_folder": folder["id"],
+                "name": folder["name"]
+                }
+        )
+        messages.success(request, f"Carpeta '{folder['name']}' seleccionada como activa.")
+        return redirect("index")
+
+    else:
+        return redirect("drive_auth_init")
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
@@ -90,5 +238,5 @@ def drive_auth_callback(request):
     }
 
     # Redirigir a la vista que lista archivos o a otra página
-    return redirect('listar')
+    return redirect('index')
 

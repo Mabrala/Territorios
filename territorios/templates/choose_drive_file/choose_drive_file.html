@@ -1,0 +1,14 @@
+{% extends "principal.html" %}
+{% block content %}
+<h1>Escoja la carpeta de Google Drive para trabajar</h1>
+{% if files %}
+  <ul>
+    {% for f in files %}
+        <li>📁 <a href="{% url 'select_drive_folder' f.id %}">{{ f.name }}</a></li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No se encontraron carpetas.</p>
+{% endif %}
+
+{% endblock %}

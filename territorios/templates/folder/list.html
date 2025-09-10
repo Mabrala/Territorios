@@ -1,6 +1,6 @@
 {% extends "principal.html" %}
 {% block content %}
-<h1>Archivos de tu carpeta de trabajo</h1>
+<h1>Archivos de la carpeta {{folder_name}}</h1>
 <ul>
   {% for f in files %}
     <li>
