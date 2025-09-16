@@ -1,0 +1,14 @@
+<!-- Modal Bootstrap para mostrar imagen -->
+<div class="modal fade" id="imageModal{{ f.id }}" tabindex="-1" aria-labelledby="imageModalLabel{{ f.id }}" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="imageModalLabel{{ f.id }}">{{ f.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img src="{% url 'view_file' f.id %}" alt="{{ f.name }}" class="img-fluid" style="max-height: 80vh; width: auto;" />
+      </div>
+    </div>
+  </div>
+</div>

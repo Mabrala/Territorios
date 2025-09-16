@@ -5,6 +5,12 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from .models import *
+
+#para imagenes
+from django.http import HttpResponse, Http404
+from googleapiclient.http import MediaIoBaseDownload
+import io
+import mimetypes
                 
 #Revisa las credenciales, si no las tiene devuelve None, si las tine devuelve lista
 def check_creds(request):
@@ -144,6 +150,48 @@ def list_drive_files(request):
         return render(request, "choose_drive_file/choose_drive_file.html", {"files": items})
     else:
         return redirect("drive_auth_init")
+
+
+#view para previsualizar imagenes
+def view_file(request, file_id):
+    creds_info = check_creds(request)
+    if not creds_info:
+        return redirect("drive_auth_init")
+
+    creds = Credentials(**creds_info)
+    service = build("drive", "v3", credentials=creds)
+
+    try:
+        # Obtener metadata del archivo
+        file = service.files().get(
+            fileId=file_id,
+            fields="id, name, mimeType"
+        ).execute()
+
+        mime_type = file.get("mimeType", "")
+        if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
+            raise Http404("El archivo no es una imagen ni un PDF")
+
+        # Descargar el archivo
+        request_file = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request_file)
+
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+
+        fh.seek(0)  # reiniciar puntero
+
+        # Determinar content type
+        content_type = mime_type or mimetypes.guess_type(file["name"])[0] or "application/octet-stream"
+
+        return HttpResponse(fh.read(), content_type=content_type)
+
+    except Exception as e:
+        raise Http404(f"No se pudo mostrar el archivo: {str(e)}")
+
+
 
 #Selecciona la carpeta sobre la que se trabajara
 def select_drive_folder(request, id_folder):

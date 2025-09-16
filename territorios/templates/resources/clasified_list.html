@@ -3,11 +3,25 @@
 {% elif f.type == "docx" %}
     📝 {{ f.name }}
 {% elif f.type == "pdf" %}
-    📄 {{ f.name }}
+    <h4>{{ f.name }}</h4>
+    <div>
+      <iframe src="{% url 'view_file' f.id %}" style="max-width: 300px;"></iframe>
+    </div>
 {% elif f.type == "excel" %}
     📊 {{ f.name }}
 {% elif f.type == "image" %}
-    🖼️ {{ f.name }}
+    <h4>{{ f.name }}</h4>
+    <div>
+      <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal{{ f.id }}" class="d-inline-block border border-primary rounded p-1" style="transition: transform 0.2s;">
+        <img src="{% url 'view_file' f.id %}" alt="{{ f.name }}" style="max-width: 300px; cursor:pointer;">
+      </a>
+      <style>
+        a[data-bs-toggle="modal"]:hover {
+          transform: scale(1.05);
+        }
+      </style>
+      {% include "resources/image_modal.html" with f=f %}
+    </div>
 {% else %}
     ❓ {{ f.name }}
 {% endif %}
