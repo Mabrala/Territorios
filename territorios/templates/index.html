@@ -8,5 +8,7 @@
     </li>
   {% endfor %}
 </ul>
-
+{% if files.has_other_pages %}
+{% include "estructura/pages.html" with files=files %}
+{% endif %}
 {% endblock %}
