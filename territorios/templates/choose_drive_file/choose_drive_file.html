@@ -6,6 +6,9 @@
     {% for f in files %}
         <li>📁 <a href="{% url 'select_drive_folder' f.id %}">{{ f.name }}</a></li>
     {% endfor %}
+    {% if files.has_other_pages %}
+      {% include "estructura/pages.html" with files=files %}
+    {% endif %}
   </ul>
 {% else %}
   <p>No se encontraron carpetas.</p>

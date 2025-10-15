@@ -110,6 +110,51 @@ def list_folder_content(request,folder_id):
     else:
         return redirect("drive_auth_init")
 
+import re
+def assign_territory(request, file_name):
+    creds_info = check_creds(request)
+    if not creds_info:
+        return redirect("drive_auth_init")
+
+    creds = Credentials(**creds_info)
+    service = build("drive", "v3", credentials=creds)
+    drive_folder = Folder.objects.first()
+    """
+    # Buscar el primer archivo cuyo nombre empieza por "AA" en la carpeta
+    aa_files = service.files().list(
+        q=f"'{folder_id}' in parents and name contains 'AA'",
+        fields="files(id, name)",
+        orderBy="name"
+    ).execute().get("files", [])
+    """
+    
+    register_id = drive_folder.register_id
+    """
+    # Obtener nombre del archivo seleccionado (ej. "R-4.png")
+    file = service.files().get(fileId=file_id, fields="id, name").execute()
+    file_name = file["name"]
+    """
+    # Convertir a código de territorio (R-4 → R4)
+    territory_code = re.sub(r"[-_.].*", "", file_name.split('.')[0])  # R-4.png → R4
+    """
+    if request.method == "POST":
+        assigned_to = request.POST.get("assigned_to")
+        assigned_date = request.POST.get("assigned_date")
+    """
+    assigned_to = "Maricarmen Salas"
+    
+    register_request = service.files().get_media(fileId=register_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, register_request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    
+    # Modificar el DOCX con python-docx
+    document = Document(fh)
+    updated = False
+        
 def search_in_folder(request, query):
     creds_info = check_creds(request)
     if not creds_info:
@@ -154,64 +199,20 @@ def list_drive_files(request):
         creds = Credentials(**creds_info)
         service = build('drive', 'v3', credentials=creds)
 
-        # Pedimos nombre, id y mimeType para saber si es archivo o carpeta
+        # Mostrar solo carpetas de nivel superior (Mi unidad)
         results = service.files().list(
-            q = "mimeType='application/vnd.google-apps.folder'",
-            pageSize=20,
+            q = "'root' in parents and mimeType='application/vnd.google-apps.folder'",
+            pageSize=100,
             fields="files(id, name, mimeType)"
         ).execute()
 
         items = results.get('files', [])
-        
-        return render(request, "choose_drive_file/choose_drive_file.html", {"files": items})
+        items = clasify_items(items)
+        files = paginate_items(request, items)
+        return render(request, "choose_drive_file/choose_drive_file.html", {"files": files})
     else:
         return redirect("drive_auth_init")
 
-#Asigna el territorio en el docx
-def update_docx(request, file_id, territory_code, col_idx, new_value):
-    creds_info = check_creds(request)
-    if not creds_info:
-        return redirect("drive_auth_init")
-
-    creds = Credentials(**creds_info)
-    service = build("drive", "v3", credentials=creds)
-
-    # 1. Descargar archivo desde Drive a memoria
-    request_file = service.files().get_media(fileId=file_id)
-    downloaded_file = io.BytesIO()
-    downloader = MediaIoBaseDownload(downloaded_file, request_file)
-
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
-    downloaded_file.seek(0)
-
-    # 2. Abrir con python-docx desde memoria
-    doc = Document(downloaded_file)
-
-    # 3. Buscar la fila y modificar la celda
-    for table in doc.tables:
-        for row in table.rows:
-            if row.cells[0].text.strip() == territory_code:
-                row.cells[col_idx].text = str(new_value)
-                break
-
-    # 4. Guardar cambios en un nuevo buffer
-    updated_file = io.BytesIO()
-    doc.save(updated_file)
-    updated_file.seek(0)
-
-    # 5. Subir archivo actualizado a Drive (sobrescribe el original)
-    media_body = MediaIoBaseUpload(
-        updated_file,
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-    updated = service.files().update(
-        fileId=file_id,
-        media_body=media_body
-    ).execute()
-
-    return f"Archivo actualizado en Drive: {updated['name']}"
 
 #visualizar imagenes
 def view_file(request, file_id):
@@ -267,12 +268,29 @@ def select_drive_folder(request, id_folder):
         if folder["mimeType"] != "application/vnd.google-apps.folder":
             messages.error(request, "El ID no corresponde a una carpeta.")
             return redirect("list_drive_files")
-                
+        # Buscar el primer archivo docx en la carpeta y se lo damos a register
+        docx_files = service.files().list(
+            q=f"'{folder['id']}' in parents and mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'",
+            fields="files(id, name)",
+            orderBy="name"
+        ).execute().get("files", [])
+        register = docx_files[0]["id"] if docx_files else None
+        
+        excel_files = service.files().list(
+            q=f"'{folder['id']}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel')",
+            fields="files(id, name)",
+            orderBy="name"
+        ).execute().get("files", [])
+        
+        excel = excel_files[0]["id"] if excel_files else None
+        
         drive_folder = Folder.objects.update_or_create(
             id=1,
             defaults={
                 "id_folder": folder["id"],
-                "name": folder["name"]
+                "name": folder["name"],
+                "register_id": register if register else '0',
+                "ex_id": excel if excel else '0'
                 }
         )
         messages.success(request, f"Carpeta '{folder['name']}' seleccionada como activa.")

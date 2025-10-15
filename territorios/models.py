@@ -5,5 +5,7 @@ from django.db import models
 class Folder(models.Model):
     id_folder=models.CharField(max_length=200)
     name=models.CharField(max_length=200)
+    register_id=models.CharField(max_length=200, default='0')
+    ex_id=models.CharField(max_length=200, default='0')
     def __str__(self):
         return self.name
