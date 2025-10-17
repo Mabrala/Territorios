@@ -110,6 +110,9 @@ def list_folder_content(request,folder_id):
     else:
         return redirect("drive_auth_init")
 
+#Metodo para asignar territorios
+#
+
 import re
 def assign_territory(request, file_name):
     creds_info = check_creds(request)
@@ -134,26 +137,72 @@ def assign_territory(request, file_name):
     file = service.files().get(fileId=file_id, fields="id, name").execute()
     file_name = file["name"]
     """
-    # Convertir a código de territorio (R-4 → R4)
-    territory_code = re.sub(r"[-_.].*", "", file_name.split('.')[0])  # R-4.png → R4
-    """
+    # Convertir a código de territorio (R-4.png/jpg/pdf → R4)
+    #territory_code = re.sub(r"[-_.].*", "", file_name.split('.')[0]) 
+    territory_code = file_name.replace(".png","").replace(".jpg","").replace(".pdf","").replace("-","").replace(".","")
+    
     if request.method == "POST":
-        assigned_to = request.POST.get("assigned_to")
-        assigned_date = request.POST.get("assigned_date")
-    """
-    assigned_to = "Maricarmen Salas"
+        #assigned_to = request.POST.get("assigned_to")
+        #assigned_date = request.POST.get("assigned_date")
     
-    register_request = service.files().get_media(fileId=register_id)
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, register_request)
-    done = False
-    while not done:
-        status, done = downloader.next_chunk()
-    fh.seek(0)
-    
-    # Modificar el DOCX con python-docx
-    document = Document(fh)
-    updated = False
+        assigned_to = "Maricarmen Salas"
+        assigned_date = "10/10/25"
+        
+        register_request = service.files().get_media(fileId=register_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, register_request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        
+        # Modificar el DOCX con python-docx
+        document = Document(fh)
+        updated = False
+        for table in document.tables:
+            for row in table.rows:
+                first_cell = row.cells[0].text.strip()
+                if first_cell == territory_code:
+                    # Buscar la primera celda "Asignado a" vacía y su fecha
+                    # Según tu estructura: celdas[2]–[5] son "Asignado a"
+                    for i in range(2, 6):
+                        if not row.cells[i].text.strip():
+                            row.cells[i].text = assigned_to
+
+                            date_cell_index = 6 + (i - 2) * 2
+                            if date_cell_index < len(row.cells):
+                                row.cells[date_cell_index].text = assigned_date
+                            updated = True
+                            break
+                if updated:
+                    break
+            if updated:
+                break
+
+        if not updated:
+            message = f"Ha ocurrido un error al asignar el territorio {territory_code}."
+            messages.error(request, message)
+            referer = request.META.get('HTTP_REFERER') or '/'
+            return redirect(referer)
+
+        # Guardar el documento modificado en memoria
+        updated_fh = io.BytesIO()
+        document.save(updated_fh)
+        updated_fh.seek(0)
+
+        # Subirlo de nuevo a Drive (sobrescribiendo)
+        media = MediaIoBaseUpload(updated_fh, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document", resumable=True)
+        service.files().update(fileId=register_id, media_body=media).execute()
+
+        message = f"{territory_code} asignado a {assigned_to} con fecha {assigned_date}."
+        messages.success(request, message)
+        referer = request.META.get('HTTP_REFERER') or '/'
+        return redirect(referer)
+    else:
+        referer = request.META.get('HTTP_REFERER')
+        if referer:
+            return redirect(referer)
+        return redirect('index')
         
 def search_in_folder(request, query):
     creds_info = check_creds(request)

@@ -8,10 +8,14 @@
       <div class="modal-body text-center">
         <img src="{% url 'view_file' f.id %}" alt="{{ f.name }}" class="img-fluid" style="max-height: 80vh; width: auto;" />
       </div>
-      {% comment "" %}
       
-      <a class="btn btn-primary" href="{% url "update_docx" f.id 'R35' 3 'Maricarmen Salas' %}"> Asignar</a>
-      {% endcomment %}
+      <div class="modal-footer">
+        <form method="post" action="{% url 'assign_territory' f.name %}" class="w-100">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary w-100">Asignar</button>
+        </form>
+      </div>
+      
     </div>
   </div>
 </div>
