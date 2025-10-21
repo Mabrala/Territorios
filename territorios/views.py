@@ -17,6 +17,9 @@ import mimetypes
 
 #escribit docx y subirlo
 from docx import Document
+from docx.shared import Pt
+from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 import os
                 
 #Revisa las credenciales, si no las tiene devuelve None, si las tine devuelve lista
@@ -110,9 +113,25 @@ def list_folder_content(request,folder_id):
     else:
         return redirect("drive_auth_init")
 
-#Metodo para asignar territorios
 #
+# --- Función para escribir en la celda con Arial 11 y centrado ---
+def set_cell_text(cell, text):
+    """Escribe texto en una celda con fuente Arial, tamaño 11 y centrado."""
+    cell.text = ""  # limpiar contenido previo
+    paragraph = cell.paragraphs[0]
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER  # centrar texto
+    run = paragraph.add_run(text)
+    
+    # Fuente y tamaño fijos
+    run.font.name = "Arial"
+    run.font.size = Pt(11)
+    
+    # Garantizar que Word reconozca Arial
+    r = run._element
+    r.rPr.rFonts.set(qn('w:eastAsia'), "Arial")
 
+    
+#Metodo para asignar territorios
 import re
 def assign_territory(request, file_name):
     creds_info = check_creds(request)
@@ -122,31 +141,16 @@ def assign_territory(request, file_name):
     creds = Credentials(**creds_info)
     service = build("drive", "v3", credentials=creds)
     drive_folder = Folder.objects.first()
-    """
-    # Buscar el primer archivo cuyo nombre empieza por "AA" en la carpeta
-    aa_files = service.files().list(
-        q=f"'{folder_id}' in parents and name contains 'AA'",
-        fields="files(id, name)",
-        orderBy="name"
-    ).execute().get("files", [])
-    """
     
     register_id = drive_folder.register_id
-    """
-    # Obtener nombre del archivo seleccionado (ej. "R-4.png")
-    file = service.files().get(fileId=file_id, fields="id, name").execute()
-    file_name = file["name"]
-    """
+    
     # Convertir a código de territorio (R-4.png/jpg/pdf → R4)
     #territory_code = re.sub(r"[-_.].*", "", file_name.split('.')[0]) 
     territory_code = file_name.replace(".png","").replace(".jpg","").replace(".pdf","").replace("-","").replace(".","")
     
     if request.method == "POST":
-        #assigned_to = request.POST.get("assigned_to")
-        #assigned_date = request.POST.get("assigned_date")
-    
-        assigned_to = "Maricarmen Salas"
-        assigned_date = "10/10/25"
+        assigned_to = request.POST.get("assigned_to")
+        assigned_date = request.POST.get("assigned_date")
         
         register_request = service.files().get_media(fileId=register_id)
         fh = io.BytesIO()
@@ -159,19 +163,24 @@ def assign_territory(request, file_name):
         # Modificar el DOCX con python-docx
         document = Document(fh)
         updated = False
+        
+# --- Recorrer tablas para asignar nombre y fecha ---
         for table in document.tables:
-            for row in table.rows:
+            for row_index, row in enumerate(table.rows):
                 first_cell = row.cells[0].text.strip()
+                
                 if first_cell == territory_code:
-                    # Buscar la primera celda "Asignado a" vacía y su fecha
-                    # Según tu estructura: celdas[2]–[5] son "Asignado a"
-                    for i in range(2, 6):
+                    # Buscar primera celda vacía en "Asignado a"
+                    for i in range(2, len(row.cells)):
                         if not row.cells[i].text.strip():
-                            row.cells[i].text = assigned_to
-
-                            date_cell_index = 6 + (i - 2) * 2
-                            if date_cell_index < len(row.cells):
-                                row.cells[date_cell_index].text = assigned_date
+                            # Escribir nombre en la celda correspondiente
+                            set_cell_text(row.cells[i], assigned_to)
+                            
+                            # Escribir fecha en la fila siguiente, misma columna
+                            if row_index + 1 < len(table.rows):
+                                next_row = table.rows[row_index + 1]
+                                set_cell_text(next_row.cells[i], assigned_date)
+                            
                             updated = True
                             break
                 if updated:
@@ -198,6 +207,7 @@ def assign_territory(request, file_name):
         messages.success(request, message)
         referer = request.META.get('HTTP_REFERER') or '/'
         return redirect(referer)
+    
     else:
         referer = request.META.get('HTTP_REFERER')
         if referer:

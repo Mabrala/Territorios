@@ -12,10 +12,18 @@
       <div class="modal-footer">
         <form method="post" action="{% url 'assign_territory' f.name %}" class="w-100">
           {% csrf_token %}
+          <!-- Campos para la asignación -->
+          <div class="mb-2">
+            <label for="assigned_to_{{ f.id }}" class="form-label">Asignar a</label>
+            <input type="text" id="assigned_to_{{ f.id }}" name="assigned_to" class="form-control" placeholder="Nombre" />
+          </div>
+          <div class="mb-2">
+            <label for="assigned_date_{{ f.id }}" class="form-label">fecha</label>
+            <input type="text" id="assigned_date_{{ f.id }}" name="assigned_date" class="form-control" placeholder="DD/MM/AA" />
+          </div>
           <button type="submit" class="btn btn-primary w-100">Asignar</button>
         </form>
       </div>
-      
     </div>
   </div>
 </div>
