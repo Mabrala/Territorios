@@ -140,17 +140,33 @@ def assign_territory(request, file_name):
 
     creds = Credentials(**creds_info)
     service = build("drive", "v3", credentials=creds)
-    drive_folder = Folder.objects.first()
-    
-    register_id = drive_folder.register_id
-    
-    # Convertir a código de territorio (R-4.png/jpg/pdf → R4)
-    #territory_code = re.sub(r"[-_.].*", "", file_name.split('.')[0]) 
-    territory_code = file_name.replace(".png","").replace(".jpg","").replace(".pdf","").replace("-","").replace(".","")
     
     if request.method == "POST":
+        
         assigned_to = request.POST.get("assigned_to")
         assigned_date = request.POST.get("assigned_date")
+        regex_date = re.compile(r"^\d{2}\/\d{2}\/\d{2}$")
+        
+        if not assigned_to:
+            message = "El campo 'Asignar a' es obligatorio."
+            messages.error(request, message)
+            referer = request.META.get('HTTP_REFERER') or '/'
+            return redirect(referer)
+        
+        if not regex_date.match(assigned_date):
+            message = "El campo 'Fecha' debe tener el formato DD-MM-AA."
+            messages.error(request, message)
+            referer = request.META.get('HTTP_REFERER') or '/'
+            return redirect(referer)
+        
+        drive_folder = Folder.objects.first()
+        
+        register_id = drive_folder.register_id
+        
+        # Convertir a código de territorio (R-4.png/jpg/pdf → R4)
+        #territory_code = re.sub(r"[-_.].*", "", file_name.split('.')[0]) 
+        territory_code = file_name.replace(".png","").replace(".jpg","").replace(".pdf","").replace("-","").replace(".","")
+        
         
         register_request = service.files().get_media(fileId=register_id)
         fh = io.BytesIO()

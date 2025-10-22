@@ -5,25 +5,67 @@
         <h5 class="modal-title" id="imageModalLabel{{ f.id }}">{{ f.name }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
+
       <div class="modal-body text-center">
         <img src="{% url 'view_file' f.id %}" alt="{{ f.name }}" class="img-fluid" style="max-height: 80vh; width: auto;" />
       </div>
-      
-      <div class="modal-footer">
-        <form method="post" action="{% url 'assign_territory' f.name %}" class="w-100">
-          {% csrf_token %}
-          <!-- Campos para la asignación -->
-          <div class="mb-2">
-            <label for="assigned_to_{{ f.id }}" class="form-label">Asignar a</label>
-            <input type="text" id="assigned_to_{{ f.id }}" name="assigned_to" class="form-control" placeholder="Nombre" />
+
+      <div class="modal-footer flex-column">
+
+        <button 
+          class="btn btn-light w-100 text-primary border border-primary fw-semibold" 
+          type="button" 
+          data-bs-toggle="collapse" 
+          data-bs-target="#collapseForm{{ f.id }}" 
+          aria-expanded="false" 
+          aria-controls="collapseForm{{ f.id }}">
+          Asignar Territorio
+        </button>
+
+        <div class="collapse w-100 mt-3" id="collapseForm{{ f.id }}">
+          <div class="card card-body border-primary-subtle">
+            <form id="form{{ f.id }}" method="post" action="{% url 'assign_territory' f.name %}" onsubmit="return validateForm(this)">
+              {% csrf_token %}
+
+              <div class="mb-3">
+                <label for="assigned_to_{{ f.id }}" class="form-label">Asignar a</label>
+                <input type="text" id="assigned_to_{{ f.id }}" name="assigned_to" class="form-control" placeholder="Nombre" />
+                <div class="invalid-feedback">El nombre no puede estar vacío</div>
+              </div>
+              <div class="mb-3">
+                <label for="assigned_date_{{ f.id }}" class="form-label">Fecha</label>
+                <input type="text" id="assigned_date_{{ f.id }}" name="assigned_date" class="form-control" placeholder="DD/MM/AA" />
+                <div class="invalid-feedback">La fecha debe estar en formato DD/MM/AA</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Confirmar Asignación</button>
+            </form>
           </div>
-          <div class="mb-2">
-            <label for="assigned_date_{{ f.id }}" class="form-label">fecha</label>
-            <input type="text" id="assigned_date_{{ f.id }}" name="assigned_date" class="form-control" placeholder="DD/MM/AA" />
-          </div>
-          <button type="submit" class="btn btn-primary w-100">Asignar</button>
-        </form>
+        </div>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+function validateForm(form) {
+  const dateInput = form.querySelector('input[name="assigned_date"]');
+  const nameInput = form.querySelector('input[name="assigned_to"]');
+  const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{2}$/;
+  let control = true;
+
+  dateInput.classList.remove('is-invalid');
+  nameInput.classList.remove('is-invalid');
+
+  if (nameInput.value.length < 3) {
+    nameInput.classList.add('is-invalid');
+    control = false;
+  }
+
+  if (!dateRegex.test(dateInput.value.trim())) {
+    dateInput.classList.add('is-invalid');
+    control = false;
+  }
+
+  return control;
+}
+</script>
