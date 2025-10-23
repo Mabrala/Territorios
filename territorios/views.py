@@ -50,7 +50,7 @@ def clasify_items(items):
                 item["type"] = "other"
     return items
 
-def paginate_items(request, items, per_page=10):
+def paginate_items(request, items, per_page=11):
     # Ordena primero carpetas, luego archivos por nombre
     items_sorted = sorted(
         items,

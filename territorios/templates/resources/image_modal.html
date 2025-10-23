@@ -11,7 +11,6 @@
       </div>
 
       <div class="modal-footer flex-column">
-
         <button 
           class="btn btn-light w-100 text-primary border border-primary fw-semibold" 
           type="button" 
@@ -23,8 +22,10 @@
         </button>
 
         <div class="collapse w-100 mt-3" id="collapseForm{{ f.id }}">
+          
           <div class="card card-body border-primary-subtle">
-            <form id="form{{ f.id }}" method="post" action="{% url 'assign_territory' f.name %}" onsubmit="return validateForm(this)">
+            
+            <form id="form{{ f.id }}" method="post" action="{% url 'assign_territory' f.name %}" onsubmit="return validateAndShowSpinner(this)">
               {% csrf_token %}
 
               <div class="mb-3">
@@ -37,10 +38,18 @@
                 <input type="text" id="assigned_date_{{ f.id }}" name="assigned_date" class="form-control" placeholder="DD/MM/AA" />
                 <div class="invalid-feedback">La fecha debe estar en formato DD/MM/AA</div>
               </div>
-              <button type="submit" class="btn btn-primary w-100">Confirmar Asignación</button>
+              <!-- Spinner, oculto por defecto; se muestra solo al enviar -->
+              <div class="d-none spinner-container text-center my-3" aria-hidden="true">
+                <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                <div class="mt-2 small text-muted">Asignando...</div>
+              </div>
+              <button type="submit" class="btn btn-primary w-100" id="confirmar-asignacion">Confirmar Asignación</button>
+
             </form>
           </div>
+
         </div>
+        
       </div>
     </div>
   </div>
@@ -56,7 +65,7 @@ function validateForm(form) {
   dateInput.classList.remove('is-invalid');
   nameInput.classList.remove('is-invalid');
 
-  if (nameInput.value.length < 3) {
+  if (nameInput.value.trim() === "" || nameInput.value.length < 3) {
     nameInput.classList.add('is-invalid');
     control = false;
   }
@@ -65,7 +74,31 @@ function validateForm(form) {
     dateInput.classList.add('is-invalid');
     control = false;
   }
-
   return control;
+}
+
+// Función mejorada: evita envíos dobles, muestra spinner y deshabilita el submit de forma fiable
+function validateAndShowSpinner(form) {
+  if (!validateForm(form)) return false;
+
+  // Evita envíos múltiples
+  if (form.dataset.submitted === 'true') return false;
+  form.dataset.submitted = 'true';
+
+  // Mostrar spinner
+  const spinner = form.querySelector('.spinner-container');
+  if (spinner) {
+    spinner.classList.remove('d-none');
+    spinner.setAttribute('aria-hidden', 'false');
+  }
+
+  // Deshabilitar el botón de submit de forma fiable (local al formulario)
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.setAttribute('aria-disabled', 'true');
+  }
+
+  return true; // permitir envío normal
 }
 </script>
