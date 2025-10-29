@@ -130,8 +130,61 @@ def set_cell_text(cell, text):
     r = run._element
     r.rPr.rFonts.set(qn('w:eastAsia'), "Arial")
 
+#Funcion para asignar en excel
+from openpyxl import load_workbook
+def actualizar_excel_drive(service, excel_id, codigo, nombre, fecha):
+
+    # --- Descargar Excel desde Drive ---
+    excel_request = service.files().get_media(fileId=excel_id)
+    excel_bytes = io.BytesIO()
+    downloader = MediaIoBaseDownload(excel_bytes, excel_request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    excel_bytes.seek(0)
+
+    # --- Modificar con openpyxl ---
+    wb = load_workbook(excel_bytes)
+
+    # --- Borrar de RECIBIDOS ---
+    if "RECIBIDOS" in wb.sheetnames:
+        hoja_rec = wb["RECIBIDOS"]
+        fila_a_borrar = None
+        for fila in range(1, hoja_rec.max_row + 1):
+            celda = hoja_rec.cell(row=fila, column=1).value
+            if celda == codigo:
+                fila_a_borrar = fila
+                break
+        if fila_a_borrar:
+            hoja_rec.delete_rows(fila_a_borrar)
+
+    # --- Añadir a ENTREGADOS ---
+    hoja = wb["ENTREGADOS"]
+
+    fila = hoja.max_row + 1
+    while all(cell.value is None for cell in hoja[fila]):
+        fila -= 1
     
-#Metodo para asignar territorios
+    hoja.cell(row=fila, column=1, value=codigo)
+    hoja.cell(row=fila, column=2, value=nombre)
+    hoja.cell(row=fila, column=3, value=fecha)
+
+    # --- Guardar cambios en memoria ---
+    updated_excel = io.BytesIO()
+    wb.save(updated_excel)
+    updated_excel.seek(0)
+    wb.close()
+
+    # --- 3️⃣ Subir de nuevo al mismo archivo en Drive ---
+    media = MediaIoBaseUpload(
+        updated_excel,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        resumable=True
+    )
+    service.files().update(fileId=excel_id, media_body=media).execute()
+
+
+#Metodo para asignar territorios en docx
 import re
 def assign_territory(request, file_name):
     creds_info = check_creds(request)
@@ -218,10 +271,17 @@ def assign_territory(request, file_name):
         # Subirlo de nuevo a Drive (sobrescribiendo)
         media = MediaIoBaseUpload(updated_fh, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document", resumable=True)
         service.files().update(fileId=register_id, media_body=media).execute()
+        
+        try:
+            excel_id = drive_folder.ex_id
+            actualizar_excel_drive(service, excel_id, territory_code, assigned_to, assigned_date)
+        except Exception as e:
+            print(f"⚠️ Error al actualizar Excel en Drive: {e}")
 
         message = f"{territory_code} asignado a {assigned_to} con fecha {assigned_date}."
         messages.success(request, message)
         referer = request.META.get('HTTP_REFERER') or '/'
+        
         return redirect(referer)
     
     else:
@@ -229,6 +289,8 @@ def assign_territory(request, file_name):
         if referer:
             return redirect(referer)
         return redirect('index')
+
+    
         
 def search_in_folder(request, query):
     creds_info = check_creds(request)
