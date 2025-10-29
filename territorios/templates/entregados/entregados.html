@@ -1,0 +1,39 @@
+{% extends "principal.html" %}
+
+{% block content %}
+<h1>Territorios entregados</h1>
+
+<div class="list-group">
+    {% for e in entregados %}
+        <div class="list-group-item p-0">
+            <form method="post" action="{% url 'recibir' %}" class="recibir-form m-0">
+                {% csrf_token %}
+                <input type="hidden" name="territory" value="{{ e.territory }}">
+                <input type="hidden" name="brother" value="{{ e.brother }}">
+
+                <!-- Botón principal: muestra/oculta el input de fecha -->
+                <button type="button" class="list-group-item list-group-item-action text-start w-100 border-0 toggle-date">
+                    {{ e.territory }} <b> | </b> {{ e.brother }} <b> | </b> {{ e.date }}
+                </button>
+
+                <!-- Sección oculta: input de fecha + botón de enviar -->
+                <div class="date-input-container d-none p-2 border-top">
+                    <input type="date" name="date" class="form-control mb-2" required>
+                    <button type="submit" class="btn btn-primary w-100">Enviar</button>
+                </div>
+            </form>
+        </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.toggle-date').forEach(button => {
+        button.addEventListener('click', function() {
+            const container = this.closest('form').querySelector('.date-input-container');
+            container.classList.toggle('d-none');
+        });
+    });
+});
+</script>
+{% endblock %}

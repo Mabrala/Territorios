@@ -8,6 +8,8 @@ urlpatterns = [
     path("drive/select/<str:id_folder>/", views.select_drive_folder, name="select_drive_folder"),
     path('assign_territory/<str:file_name>/', views.assign_territory, name='assign_territory'),
 
+    path('entregados/', views.entregados, name='entregados'),
+    path('recibir/', views.recibir, name='recibir'),
 
    #imagenes
     path("drive/file/<str:file_id>/", views.view_file, name="view_file"),

@@ -89,6 +89,7 @@ def index(request):
     else:
         return redirect("drive_auth_init")
 
+
 #Lista el contenido de cualquier carpeta
 def list_folder_content(request,folder_id):
     creds_info = check_creds(request)
@@ -290,8 +291,184 @@ def assign_territory(request, file_name):
             return redirect(referer)
         return redirect('index')
 
+def read_excel(request):
+    creds_info = check_creds(request)
+    if not creds_info:
+        return redirect("drive_auth_init")
+
+    drive_folder = Folder.objects.first()
+    excel_id = drive_folder.ex_id
+    creds = Credentials(**creds_info)
+    service = build('drive', 'v3', credentials=creds)
+
+    # Descargar el archivo Excel
+    excel_request = service.files().get_media(fileId=excel_id)
+    excel_bytes = io.BytesIO()
+    downloader = MediaIoBaseDownload(excel_bytes, excel_request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    excel_bytes.seek(0)
+
+    # Leer el contenido con openpyxl
+    wb = load_workbook(excel_bytes)
+    hoja = wb["ENTREGADOS"]
+    data = []
+    for fila in range(1, hoja.max_row + 1):
+        codigo = hoja.cell(row=fila, column=1).value
+        nombre = hoja.cell(row=fila, column=2).value
+        fecha = hoja.cell(row=fila, column=3).value
+        if codigo or nombre or fecha:
+            data.append({
+                "codigo": codigo,
+                "nombre": nombre,
+                "fecha": fecha
+            })
+    wb.close()
+
+    # Insertar/actualizar registros en la base de datos para cada fila leida
+    try:
+        entregados_list = Entregados.objects.all()
+        entregados_list.delete()
+        for row in data:
+            codigo = row.get("codigo") or ""
+            nombre = row.get("nombre") or ""
+            fecha = row.get("fecha") or ""
+            if codigo != "":
+                # Actualiza si ya existe un registro con ese código, o crea uno nuevo
+                Entregados.objects.update_or_create(
+                    territory=str(codigo),
+                    defaults={
+                        "brother": str(nombre),
+                        "date": str(fecha)
+                    }
+                )
+    except Exception:
+        # No interrumpir la vista en caso de error con la BD
+        pass
+
+def entregados(request):
+    creds_info = check_creds(request)
+    if not creds_info:
+        return redirect("drive_auth_init")
+    read_excel(request)
+    entregados_list = Entregados.objects.all().order_by('territory')
+    return render(request, "entregados/entregados.html", {"entregados": entregados_list})
+
+from datetime import datetime
+def recibir(request):
+    creds_info = check_creds(request)
+    if not creds_info:
+        return redirect("drive_auth_init")
     
+    drive_folder = Folder.objects.first()
+    excel_id = drive_folder.ex_id
+    docx_id = drive_folder.register_id
+    creds = Credentials(**creds_info)
+    service = build('drive', 'v3', credentials=creds)
+    
+    if request.method == "POST":
+        regex_date = re.compile(r"^\d{2}\/\d{2}\/\d{2}$")
+        territory = request.POST.get("territory")
+        date = datetime.strptime(request.POST['date'], "%Y-%m-%d").strftime("%d/%m/%y")
+        assigned_to = request.POST.get("brother")
         
+        if not regex_date.match(date):
+            message = "El campo 'Fecha' debe tener el formato DD-MM-AA."
+            messages.error(request, message)
+            referer = request.META.get('HTTP_REFERER') or '/'
+            return redirect(referer)
+        
+        register_request = service.files().get_media(fileId=docx_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, register_request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        
+        # Modificar el DOCX con python-docx
+        document = Document(fh)
+        updated = False
+        
+# --- Recorrer tablas para asignar nombre y fecha ---
+        for table in document.tables:
+            for row_index, row in enumerate(table.rows):
+                first_cell = row.cells[0].text.strip()
+                if first_cell == territory:
+                    # Buscar primera celda vacía en "Asignado a"
+                    for i in range(2, len(row.cells)):
+                        if row.cells[i].text.strip() == assigned_to:
+                            # Escribir fecha en la fila siguiente, columna+1
+                            if row_index + 1 < len(table.rows):
+                                next_row = table.rows[row_index + 1]
+                                set_cell_text(next_row.cells[i+1], date)
+                            
+                            updated = True
+                            break
+                if updated:
+                    break
+            if updated:
+                break
+        
+        excel_request = service.files().get_media(fileId=excel_id)
+        excel_bytes = io.BytesIO()
+        downloader = MediaIoBaseDownload(excel_bytes, excel_request)
+        done_excel = False
+        while not done_excel:
+            status, done_excel = downloader.next_chunk()
+        excel_bytes.seek(0)
+
+        wb = load_workbook(excel_bytes)
+        hoja = wb["ENTREGADOS"]
+        excel_updated = False
+        for fila in range(1, hoja.max_row + 1):
+            if hoja.cell(row=fila, column=1).value == territory:
+                hoja.cell(row=fila, column=1).value = ""
+                hoja.cell(row=fila, column=2).value = ""
+                hoja.cell(row=fila, column=3).value = ""
+                excel_updated = True
+                break
+        
+        if excel_updated:
+            recibidos = wb["RECIBIDOS"]
+            nueva_fila = recibidos.max_row + 1
+            fila = hoja.max_row + 1
+            while all(cell.value is None for cell in hoja[fila]):
+                fila -= 1
+            recibidos.cell(row=fila, column=1, value=territory)
+            recibidos.cell(row=fila, column=2, value=date)
+        wb.close()
+        
+        
+        if updated and excel_updated:
+            message = f"{territory} recibido de {assigned_to} con fecha {date}."
+            messages.success(request, message)
+            updated_fh = io.BytesIO()
+            document.save(updated_fh)
+            updated_fh.seek(0)
+            updated_excel = io.BytesIO()
+            wb.save(updated_excel)
+            updated_excel.seek(0)
+            
+            media = MediaIoBaseUpload(updated_fh, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document", resumable=True)
+            service.files().update(fileId=docx_id, media_body=media).execute()
+            media = MediaIoBaseUpload(
+                updated_excel,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                resumable=True
+            )
+            service.files().update(fileId=excel_id, media_body=media).execute()
+            bbdd = Entregados.objects.filter(territory=territory, brother=assigned_to).first()
+            if bbdd:
+                bbdd.delete()
+        else:
+            message = f"Ha ocurrido un error al recibir el territorio {territory}."
+            messages.error(request, message)
+        
+        return redirect('entregados')
+
+
 def search_in_folder(request, query):
     creds_info = check_creds(request)
     if not creds_info:
