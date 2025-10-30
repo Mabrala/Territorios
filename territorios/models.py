@@ -13,4 +13,4 @@ class Folder(models.Model):
 class Entregados(models.Model):
     territory=models.CharField(max_length=200)
     brother=models.CharField(max_length=200)
-    date=models.CharField(max_length=200)
+    date=models.DateField()

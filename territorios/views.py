@@ -86,6 +86,8 @@ def index(request):
 
             files = paginate_items(request, items)
             return render(request, 'index.html', {"files": files})
+        else:
+            return redirect("list_drive_files")
     else:
         return redirect("drive_auth_init")
 
@@ -187,6 +189,7 @@ def actualizar_excel_drive(service, excel_id, codigo, nombre, fecha):
 
 #Metodo para asignar territorios en docx
 import re
+import datetime
 def assign_territory(request, file_name):
     creds_info = check_creds(request)
     if not creds_info:
@@ -318,7 +321,7 @@ def read_excel(request):
         codigo = hoja.cell(row=fila, column=1).value
         nombre = hoja.cell(row=fila, column=2).value
         fecha = hoja.cell(row=fila, column=3).value
-        if codigo or nombre or fecha:
+        if codigo != "" and codigo != "TERRITORIO":
             data.append({
                 "codigo": codigo,
                 "nombre": nombre,
@@ -335,12 +338,11 @@ def read_excel(request):
             nombre = row.get("nombre") or ""
             fecha = row.get("fecha") or ""
             if codigo != "":
-                # Actualiza si ya existe un registro con ese código, o crea uno nuevo
                 Entregados.objects.update_or_create(
                     territory=str(codigo),
                     defaults={
                         "brother": str(nombre),
-                        "date": str(fecha)
+                        "date": fecha.date()
                     }
                 )
     except Exception:
@@ -352,7 +354,7 @@ def entregados(request):
     if not creds_info:
         return redirect("drive_auth_init")
     read_excel(request)
-    entregados_list = Entregados.objects.all().order_by('territory')
+    entregados_list = Entregados.objects.all().order_by('date')
     return render(request, "entregados/entregados.html", {"entregados": entregados_list})
 
 from datetime import datetime

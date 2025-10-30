@@ -1,29 +1,46 @@
 {% extends "principal.html" %}
 
 {% block content %}
-<h1>Territorios entregados</h1>
+<div class="container mt-4">
+    <h1 class="mb-4 text-center">Territorios entregados</h1>
 
-<div class="list-group">
-    {% for e in entregados %}
-        <div class="list-group-item p-0">
-            <form method="post" action="{% url 'recibir' %}" class="recibir-form m-0">
-                {% csrf_token %}
-                <input type="hidden" name="territory" value="{{ e.territory }}">
-                <input type="hidden" name="brother" value="{{ e.brother }}">
+    <div class="row g-3">
+        {% for e in entregados %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-0">
+                        <form method="post" action="{% url 'recibir' %}" class="recibir-form m-0">
+                            {% csrf_token %}
+                            <input type="hidden" name="territory" value="{{ e.territory }}">
+                            <input type="hidden" name="brother" value="{{ e.brother }}">
 
-                <!-- Botón principal: muestra/oculta el input de fecha -->
-                <button type="button" class="list-group-item list-group-item-action text-start w-100 border-0 toggle-date">
-                    {{ e.territory }} <b> | </b> {{ e.brother }} <b> | </b> {{ e.date }}
-                </button>
+                            <!-- Botón principal -->
+                            <button type="button"
+                                    class="btn w-100 text-start toggle-date d-flex flex-column align-items-start p-3 border-0 bg-light">
+                                <h5 class="mb-1 text-primary fw-bold">{{ e.territory }}</h5>
+                                <p class="mb-1 text-secondary">
+                                    <i class="bi bi-person-fill me-1"></i><b>{{ e.brother }}</b>
+                                </p>
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3 me-1"></i><b>{{ e.date|date:"d/m/Y" }}</b>
+                                </small>
+                            </button>
 
-                <!-- Sección oculta: input de fecha + botón de enviar -->
-                <div class="date-input-container d-none p-2 border-top">
-                    <input type="date" name="date" class="form-control mb-2" required>
-                    <button type="submit" class="btn btn-primary w-100">Enviar</button>
+                            <!-- Sección oculta -->
+                            <div class="date-input-container d-none p-3 border-top bg-white">
+                                <label for="date_{{ forloop.counter }}" class="form-label fw-semibold">Fecha de entrega:</label>
+                                <input type="date" id="date_{{ forloop.counter }}" name="date"
+                                       class="form-control mb-2" required>
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="bi bi-send-fill me-1"></i>Enviar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </form>
-        </div>
-    {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
 </div>
 
 <script>
